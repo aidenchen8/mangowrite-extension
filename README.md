@@ -39,7 +39,7 @@ Then load it unpacked: `chrome://extensions` → enable Developer mode →
 `MW_EXT_STORE=1` (store-style build without the `declarativeNetRequest` helper).
 
 **Privacy**: see [PRIVACY.md](PRIVACY.md).
-**Support**: open a [GitHub Issue](../../issues).
+**Support**: open a [GitHub Issue](https://github.com/aidenchen8/mangowrite-extension/issues).
 
 ## 中文
 
@@ -58,7 +58,7 @@ Web of Science 等）一键采集进你的芒果写作文库，**PDF 优先**，
 （`pnpm install && pnpm build`）。
 
 **隐私政策**见 [PRIVACY.md](PRIVACY.md)（含中文摘要）；问题反馈请开
-[Issue](../../issues)。
+[Issue](https://github.com/aidenchen8/mangowrite-extension/issues)。
 
 ## Repository policy · 仓库说明
 
