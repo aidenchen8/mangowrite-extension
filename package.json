@@ -1,0 +1,25 @@
+{
+  "name": "mangowrite-extension",
+  "version": "0.1.18",
+  "description": "Browser extension that captures papers (CNKI, Wanfang, CQVIP, IEEE, arXiv, DSpace, Web of Science …) into your MangoWrite library. PDF first.",
+  "type": "module",
+  "license": "CC-BY-NC-4.0",
+  "author": "aidenchen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aidenchen8/mangowrite-extension.git"
+  },
+  "scripts": {
+    "generate:build-info": "node scripts/generate-build-info.mjs",
+    "build": "node scripts/generate-build-info.mjs && tsc -p tsconfig.json && esbuild src/content.ts --bundle --format=iife --platform=browser --target=chrome110 --outfile=dist/content.js && esbuild src/background.ts --bundle --format=esm --platform=browser --target=chrome110 --outfile=dist/background.js",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.24",
+    "@types/node": "^24.13.3",
+    "esbuild": "^0.27.7",
+    "linkedom": "^0.18.13",
+    "typescript": "~7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

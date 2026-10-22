@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "芒果写作",
+    "description": "Extension name shown in the store, toolbar tooltip, notifications and chrome://extensions."
+  },
+  "extensionDescription": {
+    "message": "在期刊页面一键抓取正文，接入 MangoWrite 的 Import 模块。",
+    "description": "Short description from the manifest, surfaced by the store as shortDescription."
+  }
+}

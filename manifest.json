@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "zh_CN",
+  "version": "0.1.18",
+  "permissions": ["storage", "tabs", "activeTab", "declarativeNetRequest", "webRequest", "notifications", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "导入到 MangoWrite",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16-gray.png",
+      "32": "icons/icon32-gray.png",
+      "48": "icons/icon48-gray.png",
+      "128": "icons/icon128-gray.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://localhost:3000/*",
+      "http://localhost:3001/*",
+      "http://localhost:5173/*",
+      "http://127.0.0.1/*",
+      "http://127.0.0.1:3000/*",
+      "http://127.0.0.1:3001/*",
+      "http://127.0.0.1:5173/*",
+      "https://*.mangowrite.com/*",
+      "https://write.aidenchen.cn/*"
+    ]
+  }
+}

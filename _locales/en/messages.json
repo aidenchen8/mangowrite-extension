@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Mango Write",
+    "description": "Extension name shown in the store, toolbar tooltip, notifications and chrome://extensions."
+  },
+  "extensionDescription": {
+    "message": "Capture full text from journal pages in one click, into Mango Write's Import module.",
+    "description": "Short description from the manifest, surfaced by the store as shortDescription."
+  }
+}

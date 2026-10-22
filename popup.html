@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MangoWrite Import</title>
+    <style>
+      :root {
+        color-scheme: light;
+
+        /* Subset of packages/shared/src/var.css — the extension has no build
+           step for shared CSS, so the brand tokens are mirrored here by hand.
+           Keep in sync if the brand palette changes. */
+        --color-brand-50: #fff7ed;
+        --color-brand-100: #ffedd5;
+        --color-brand-400: #fb923c;
+        --color-brand-500: #f97316;
+        --color-brand-600: #ea580c;
+        --color-brand-500-rgb: 249 115 22;
+
+        --color-bg: oklch(0.992 0.004 70);
+        --color-surface-base: #ffffff;
+        --color-surface-muted: oklch(0.985 0.004 70);
+
+        --color-text-primary: oklch(0.22 0.01 70);
+        --color-text-secondary: oklch(0.42 0.012 70);
+        --color-text-tertiary: oklch(0.6 0.012 70);
+        --color-text-on-brand: #ffffff;
+
+        --color-border-subtle: oklch(0.92 0.006 70);
+        --color-border-strong: oklch(0.86 0.008 70);
+
+        --color-success-500: oklch(0.65 0.13 150);
+        --color-success-500-rgb: 34 197 94;
+        --color-danger-500: oklch(0.58 0.19 25);
+        --color-danger-500-rgb: 220 38 38;
+
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 999px;
+
+        --shadow-xs: 0 1px 2px rgba(20, 14, 8, 0.05);
+        --shadow: 0 2px 8px rgba(20, 14, 8, 0.06), 0 1px 2px rgba(20, 14, 8, 0.04);
+        --shadow-lg: 0 18px 40px -12px rgba(40, 20, 4, 0.18), 0 4px 12px rgba(20, 14, 8, 0.06);
+        --shadow-brand-md: 0 6px 16px -6px rgb(var(--color-brand-500-rgb) / 0.45);
+
+        --gradient-surface-accent:
+          radial-gradient(circle at top right, rgb(var(--color-brand-500-rgb) / 0.08), transparent 56%),
+          var(--color-surface-base);
+
+        --font-family-sans:
+          "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+        font-family: var(--font-family-sans);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 328px;
+        background: var(--color-bg);
+        color: var(--color-text-primary);
+      }
+
+      main {
+        padding: 14px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---- top bar ---- */
+      /* 顶栏一行：brand 居左，环境切换点 + 设置按钮居右。状态胶囊挪到顶栏
+         下方独立成行（见 .state-badge）：文案可能很长（甚至来自服务端消息），
+         独立行内换行完整显示，不省略截断，也不挤压标题。 */
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 10px;
+      }
+
+      .brand-text {
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+
+      /* logo 与标题锁在同一行内对齐；整行可点，跳当前连接环境的网页端首页。 */
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-shrink: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      .brand-row:hover {
+        background: var(--color-surface-muted);
+      }
+
+      .brand-logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-sm);
+        flex-shrink: 0;
+        filter: grayscale(1);
+        opacity: 0.5;
+        transition: filter 0.18s ease, opacity 0.18s ease;
+      }
+
+      .brand-logo.recognized {
+        filter: none;
+        opacity: 1;
+      }
+
+      .brand-text h1 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      .brand-row h1 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* 环境切换：设置按钮左侧的一枚 28px 圆点按钮，颜色即环境档（红=测试，
+         灰=其他，绿=正式）；文字省略，环境名在 tooltip 与下拉菜单里完整展示。
+         普通用户连正式环境时整颗不渲染。 */
+      .env-switch {
+        position: relative;
+        display: inline-flex;
+        flex-shrink: 0;
+      }
+
+      .env-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .env-chip:hover {
+        background: var(--color-surface-muted);
+      }
+
+      .env-chip .env-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        box-shadow: 0 0 0 3px rgb(0 0 0 / 0.04);
+      }
+
+      .env-chip.test .env-dot {
+        background: var(--color-danger-500);
+      }
+
+      .env-chip.other .env-dot {
+        background: var(--color-text-tertiary);
+      }
+
+      /* 正式环境的入口只对能切环境的账号出现（普通用户看到的仍是原样顶栏）。 */
+      .env-chip.production .env-dot {
+        background: var(--color-success-500);
+      }
+
+      button.env-chip[disabled] {
+        cursor: default;
+      }
+
+      button.env-chip[disabled]:hover {
+        background: transparent;
+      }
+
+      .env-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        /* 芯片钉在顶栏右缘，菜单右对齐锚定，左锚会伸出 328px 弹窗。 */
+        right: 0;
+        left: auto;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        min-width: 190px;
+        padding: 4px;
+        border-radius: var(--radius-md);
+        background: var(--color-surface-base);
+        border: 1px solid var(--color-border-subtle);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .env-menu button {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-family: inherit;
+        font-size: 11px;
+        text-align: left;
+        color: var(--color-text-primary);
+        cursor: pointer;
+      }
+
+      .env-menu button:hover {
+        background: var(--color-surface-muted);
+      }
+
+      .env-menu button[aria-current="true"] {
+        color: var(--color-brand-600);
+        font-weight: 600;
+      }
+
+      .env-menu .env-menu-host {
+        font-size: 10px;
+        color: var(--color-text-tertiary);
+        font-weight: 400;
+      }
+
+      /* 状态行：顶栏下方独立一行，宽度贴内容。文案完整显示——短文案是
+         一颗紧凑胶囊，长文案（服务端消息、错误提示）在胶囊内换行，
+         永不省略截断。 */
+      .state-badge {
+        display: inline-flex;
+        align-items: flex-start;
+        gap: 5px;
+        max-width: 100%;
+        margin: -2px 0 12px;
+        padding: 3px 9px;
+        border-radius: var(--radius-md);
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.45;
+        background: var(--color-surface-muted);
+        color: var(--color-text-tertiary);
+        border: 1px solid var(--color-border-subtle);
+      }
+
+      .state-badge .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+        /* 与首行文字垂直居中（11px × 1.45 行高 ≈ 16px）。 */
+        margin-top: 5px;
+      }
+
+      .state-badge .state-text {
+        min-width: 0;
+        /* 错误消息里可能出现长 URL 这类不可断 token，放行任意断点。 */
+        overflow-wrap: anywhere;
+      }
+
+      .state-badge.recognized {
+        background: rgb(var(--color-success-500-rgb) / 0.1);
+        border-color: rgb(var(--color-success-500-rgb) / 0.2);
+        color: var(--color-success-500);
+      }
+
+      /* 顶栏内只剩 brand 与右侧的 [环境芯片 + 设置]；用 auto margin 把右侧组
+         推到右缘。芯片隐藏（普通用户连正式环境）时由设置按钮自己接管 auto。 */
+      #open-settings {
+        margin-left: auto;
+      }
+
+      .env-switch:not([hidden]) {
+        margin-left: auto;
+      }
+
+      .env-switch:not([hidden]) ~ #open-settings {
+        margin-left: 0;
+      }
+
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-text-tertiary);
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .icon-btn:hover {
+        background: var(--color-surface-muted);
+        color: var(--color-text-secondary);
+      }
+
+      .icon-btn svg {
+        width: 17px;
+        height: 17px;
+      }
+
+      /* ---- membership bar ---- */
+      /* 已配对且服务端报告了会员档位时的一行账号入口：18px 档位徽章 + 档位名 +
+         本周解析用量，点击新开 web 端权益页（{apiBaseUrl origin}/membership）。
+         未配对或无会员时整行不渲染（hidden，不占位）。视觉上沿用 update-banner
+         的品牌浅底卡片语言，但它常驻而非提示，权重压低一档。 */
+      .membership-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin: -4px 0 12px;
+        padding: 6px 10px;
+        border: 1px solid rgb(var(--color-brand-500-rgb) / 0.22);
+        border-radius: var(--radius-md);
+        background: rgb(var(--color-brand-500-rgb) / 0.06);
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .membership-bar:hover {
+        border-color: rgb(var(--color-brand-500-rgb) / 0.45);
+        background: rgb(var(--color-brand-500-rgb) / 0.1);
+      }
+
+      /* 档位标识（局促位置的小标识）：crown 图标 + 正下方小字档位名。
+         名称按词分行（单词不换行，两个单词两行），与 web 顶栏同规则。 */
+      .membership-bar .membership-tier {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+
+      .membership-bar .membership-tier .tier-crown {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+
+      .membership-bar .membership-tier .tier-name {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 10px;
+        line-height: 1.15;
+        font-weight: 600;
+        color: var(--color-text-primary);
+      }
+
+      .membership-bar .membership-tier .tier-name-line {
+        white-space: nowrap;
+      }
+
+      .membership-bar .membership-usage {
+        margin-left: auto;
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--color-text-tertiary);
+        white-space: nowrap;
+      }
+
+      .membership-bar .membership-arrow {
+        flex-shrink: 0;
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+      }
+
+      /* ---- update banner ---- */
+      .update-banner {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: -4px 0 12px;
+        padding: 8px 11px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgb(var(--color-brand-500-rgb) / 0.35);
+        background: rgb(var(--color-brand-500-rgb) / 0.08);
+        color: var(--color-brand-600);
+        font-size: 11.5px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .update-banner:hover {
+        background: rgb(var(--color-brand-500-rgb) / 0.14);
+      }
+
+      .update-banner .update-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--color-brand-500);
+        flex-shrink: 0;
+      }
+
+      .update-banner .update-text {
+        flex: 1;
+        min-width: 0;
+      }
+
+      /* ---- cards ---- */
+      .card {
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-lg);
+        background: var(--color-surface-base);
+        box-shadow: var(--shadow);
+      }
+
+      .cta-card {
+        padding: 11px 12px;
+        margin-bottom: 12px;
+        background: var(--gradient-surface-accent);
+      }
+
+      .cta-source {
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+        margin-bottom: 3px;
+      }
+
+      .cta-title {
+        font-size: 12.5px;
+        font-weight: 500;
+        line-height: 1.4;
+        margin-bottom: 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cta-title.muted {
+        color: var(--color-text-tertiary);
+        font-weight: 400;
+      }
+
+      button.primary {
+        width: 100%;
+        border: 0;
+        border-radius: var(--radius-md);
+        padding: 9px;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        color: var(--color-text-on-brand);
+        background: var(--color-brand-500);
+        box-shadow:
+          inset 0 1px 0 rgb(255 255 255 / 0.18),
+          var(--shadow-brand-md);
+        cursor: pointer;
+      }
+
+      button.primary:not(:disabled):hover {
+        background: var(--color-brand-600);
+      }
+
+      button.primary:disabled {
+        opacity: 0.55;
+        cursor: default;
+        box-shadow: none;
+      }
+
+      /* ---- import target row ---- */
+      /* 「导入此页」上方常驻一行导入目标（导入到 个人文库 / 团队名），不点开
+         也知道会进哪个空间。有可写团队时该行可点、展开目标菜单；没有团队时
+         只读展示，不渲染展开箭头。 */
+      .capture-area {
+        position: relative;
+      }
+
+      .target-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+        height: 22px;
+        margin: 0 0 7px;
+        padding: 0 2px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-family: inherit;
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .target-row .target-value {
+        font-weight: 500;
+        color: var(--color-text-secondary);
+      }
+
+      .target-row:not([disabled]):hover .target-value {
+        color: var(--color-brand-600);
+      }
+
+      .target-row .target-chevron {
+        width: 11px;
+        height: 11px;
+        flex-shrink: 0;
+      }
+
+      button.target-row[disabled] {
+        cursor: default;
+      }
+
+      button.target-row[disabled] .target-chevron {
+        display: none;
+      }
+
+      /* 菜单锚在目标行正下方、盖住导入按钮，宽度与卡片内容区一致。 */
+      .target-menu {
+        position: absolute;
+        top: 26px;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        padding: 4px;
+        border-radius: var(--radius-md);
+        background: var(--color-surface-base);
+        border: 1px solid var(--color-border-subtle);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .target-menu button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 500;
+        text-align: left;
+        color: var(--color-text-primary);
+        cursor: pointer;
+      }
+
+      .target-menu button:hover {
+        background: var(--color-surface-muted);
+      }
+
+      .target-menu button[aria-current="true"] {
+        color: var(--color-brand-600);
+      }
+
+      .target-menu .target-check {
+        width: 12px;
+        flex-shrink: 0;
+        visibility: hidden;
+      }
+
+      .target-menu button[aria-current="true"] .target-check {
+        visibility: visible;
+      }
+
+      button.secondary {
+        width: 100%;
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-md);
+        padding: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        font-family: inherit;
+        background: var(--color-surface-muted);
+        color: var(--color-text-secondary);
+        cursor: pointer;
+      }
+
+      button.secondary:hover {
+        border-color: var(--color-border-strong);
+      }
+
+      /* ---- connect (unpaired) card ---- */
+      .connect-card {
+        padding: 16px 14px;
+        margin-bottom: 12px;
+        text-align: center;
+        border-color: rgb(var(--color-brand-500-rgb) / 0.25);
+        background: var(--gradient-surface-accent);
+      }
+
+      .connect-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-md);
+        background: rgb(var(--color-brand-500-rgb) / 0.1);
+        color: var(--color-brand-600);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+      }
+
+      .connect-icon svg {
+        width: 19px;
+        height: 19px;
+      }
+
+      .connect-title {
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 5px;
+      }
+
+      .connect-desc {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--color-text-secondary);
+      }
+
+      /* ---- queue ---- */
+      .queue-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 2px 8px;
+      }
+
+      .queue-head .summary {
+        flex: 1;
+      }
+
+      .queue-head .label {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+      }
+
+      .queue-head .summary {
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+      }
+
+      .queue-clear {
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 2px 4px;
+        border-radius: var(--radius-sm, 4px);
+      }
+
+      .queue-clear:hover {
+        color: var(--color-text-primary);
+        background: rgb(var(--color-brand-500-rgb) / 0.08);
+      }
+
+      .task-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .task-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* 分区小标签：需要处理 / 最近记录。 */
+      .queue-sub {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        margin: 0 2px 0;
+      }
+
+      /* 终态卡的来源与时间锚点。 */
+      .task-meta {
+        font-size: 10.5px;
+        color: var(--color-text-tertiary);
+        margin-top: 5px;
+      }
+
+      .task {
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-lg);
+        background: var(--color-surface-base);
+        box-shadow: var(--shadow-xs);
+        padding: 10px 11px;
+      }
+
+      .task.failed {
+        border-color: rgb(var(--color-danger-500-rgb) / 0.35);
+        background: rgb(var(--color-danger-500-rgb) / 0.1);
+      }
+
+      .task.warn {
+        border-color: rgb(245 158 11 / 0.45);
+        background: rgb(245 158 11 / 0.12);
+        opacity: 1;
+      }
+
+      .task.completed {
+        opacity: 0.72;
+      }
+
+      .task.completed.warn {
+        opacity: 1;
+      }
+
+      /* 补全/更正任务卡：待确认/错配/失败用琥珀色边提示需动手；已更新沉底。 */
+      .task.completion.completion-active {
+        border-color: rgb(245 158 11 / 0.45);
+        background: rgb(245 158 11 / 0.12);
+      }
+
+      .task.completion.completion-failed {
+        border-color: rgb(var(--color-danger-500-rgb) / 0.35);
+        background: rgb(var(--color-danger-500-rgb) / 0.1);
+      }
+
+      .task.completion.completion-done {
+        opacity: 0.72;
+      }
+
+      /* 错配核对：页面题名 vs 目标题名，两行对照，长题名允许换行。 */
+      .completion-diff-label {
+        font-weight: 600;
+        color: var(--color-warning-600, #d97706);
+      }
+
+      .completion-diff-line {
+        overflow-wrap: anywhere;
+        line-height: 1.5;
+      }
+
+      /* 确认卡副文：讲清更新范围与手动层保留，比题录事实再沉一档。 */
+      .completion-confirm-hint {
+        opacity: 0.85;
+      }
+
+      .task-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .task-icon {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .task-icon svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .spinner {
+        width: 13px;
+        height: 13px;
+        border: 2px solid rgb(var(--color-brand-500-rgb) / 0.25);
+        border-top-color: var(--color-brand-500);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .task-title {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .task-pct {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-brand-600);
+      }
+
+      .task-status {
+        font-size: 10.5px;
+        color: var(--color-text-tertiary);
+        white-space: nowrap;
+      }
+
+      .task-status.ok {
+        color: var(--color-success-500);
+      }
+
+      .task-status.warn {
+        color: var(--color-warning-500, #f59e0b);
+        font-weight: 600;
+      }
+
+      .task-warning {
+        font-size: 10.5px;
+        color: var(--color-warning-600, #d97706);
+        margin-top: 5px;
+        font-weight: 500;
+      }
+
+      .task-x {
+        color: var(--color-text-tertiary);
+        cursor: pointer;
+        display: inline-flex;
+      }
+
+      .task-x svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .progress-bar {
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--color-border-subtle);
+        overflow: hidden;
+        margin-top: 8px;
+      }
+
+      .progress-bar > div {
+        height: 100%;
+        background: var(--color-brand-500);
+        border-radius: var(--radius-pill);
+        transition: width 0.25s ease;
+      }
+
+      .task-detail {
+        font-size: 10.5px;
+        color: var(--color-text-tertiary);
+        margin-top: 5px;
+      }
+
+      .task-error {
+        font-size: 10.5px;
+        color: oklch(0.5 0.16 25);
+        margin: 5px 0 8px;
+      }
+
+      /* 失败卡第二行：怎么办（按钮帮不上时的手动指引）。 */
+      .task-hint {
+        font-size: 10.5px;
+        line-height: 1.5;
+        color: var(--color-text-secondary);
+        margin: -3px 0 8px;
+      }
+
+      /* 完成卡的下一步：去文库看这条。 */
+      .task-open {
+        margin-top: 8px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-size: 11px;
+        font-weight: 500;
+        font-family: inherit;
+        color: var(--color-brand-500);
+        cursor: pointer;
+      }
+
+      .task-open:hover {
+        text-decoration: underline;
+      }
+
+      .task-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .task-actions button {
+        flex: 1;
+        border: 0;
+        border-radius: 8px;
+        padding: 6px;
+        font-size: 11.5px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      .btn-brand {
+        color: #fff;
+        background: var(--color-brand-500);
+      }
+
+      .btn-danger {
+        color: #fff;
+        background: var(--color-danger-500);
+      }
+
+      .btn-ghost {
+        color: var(--color-text-secondary);
+        background: var(--color-surface-muted);
+        border: 1px solid var(--color-border-subtle) !important;
+      }
+
+      /* ---- empty / hints ---- */
+      .empty-hint {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--color-text-tertiary);
+        padding: 4px 2px;
+      }
+
+      /* ---- account chip ---- */
+      .account-chip {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 13px;
+        padding-top: 11px;
+        border-top: 1px solid var(--color-border-subtle);
+      }
+
+      .avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: rgb(var(--color-brand-500-rgb) / 0.12);
+        color: var(--color-brand-600);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      /* 网页端同步来的头像图（配对时随 user.image 推来）；加载失败回退首字母。 */
+      .avatar.has-image {
+        background-size: cover;
+        background-position: center;
+      }
+
+      .account-chip .email {
+        flex: 1;
+        min-width: 0;
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .account-chip .manage {
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+      }
+
+      /* ---- settings view ---- */
+      .settings-card {
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+
+      .settings-account {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 12px;
+      }
+
+      .settings-account .avatar {
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
+      }
+
+      .settings-account .info {
+        min-width: 0;
+        line-height: 1.3;
+      }
+
+      .settings-account .name {
+        font-size: 12.5px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .settings-account .sub {
+        font-size: 11px;
+        color: var(--color-text-tertiary);
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .toggle-row .t-label {
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+
+      .setting-desc {
+        margin: 7px 0 0;
+        font-size: 11px;
+        line-height: 1.5;
+        color: var(--color-text-tertiary);
+      }
+
+      /* switch */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .switch .track {
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-pill);
+        background: var(--color-border-strong);
+        transition: background 0.18s ease;
+      }
+
+      .switch .track::before {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: var(--shadow-xs);
+        transition: transform 0.18s ease;
+      }
+
+      .switch input:checked + .track {
+        background: var(--color-brand-500);
+      }
+
+      .switch input:checked + .track::before {
+        transform: translateX(16px);
+      }
+
+      #build-info {
+        margin-top: 10px;
+        /* 第二行是已连接的 API base URL（applyEnvInfo 用 \n 拼的）。 */
+        white-space: pre-line;
+        font-size: 10px;
+        color: var(--color-text-tertiary);
+        text-align: center;
+        user-select: text;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- ================= MAIN VIEW ================= -->
+      <section id="main-view">
+        <div class="topbar">
+          <div class="brand-text">
+            <button class="brand-row" id="brand-home" type="button" title="打开 MangoWrite">
+              <img class="brand-logo" id="brand-logo" src="./icons/icon48.png" alt="MangoWrite" />
+              <h1>MangoWrite</h1>
+            </button>
+          </div>
+          <span class="env-switch" id="env-switch" hidden>
+            <button id="env-badge" class="env-chip" type="button" hidden title="">
+              <span class="env-dot"></span>
+            </button>
+            <span id="env-menu" class="env-menu" hidden></span>
+          </span>
+          <button id="open-settings" class="icon-btn" type="button" title="设置" aria-label="设置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+
+        <!-- 当前页状态：独立成行，长文案换行完整显示（不省略） -->
+        <div id="state-badge" class="state-badge">
+          <span class="dot"></span>
+          <span id="state-badge-text" class="state-text">检测中…</span>
+        </div>
+
+        <!-- 会员条：已配对且有会员档位时显示，点击打开 web 端权益页（见 popup.ts renderMembership） -->
+        <button id="membership-bar" class="membership-bar" type="button" hidden>
+          <span class="membership-tier" id="membership-tier">
+            <svg class="tier-crown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg>
+            <span class="tier-name" id="membership-name"></span>
+          </span>
+          <span class="membership-usage" id="membership-usage"></span>
+          <span class="membership-arrow">→</span>
+        </button>
+
+        <!-- site 渠道：popup 打开时检查到新版本则显示（见 popup.ts checkUpdateOnOpen） -->
+        <div id="update-banner" class="update-banner" role="button" tabindex="0" hidden>
+          <span class="update-dot"></span>
+          <span class="update-text">有新版本 <b id="update-version"></b>，点击查看升级指引</span>
+          <span>→</span>
+        </div>
+
+        <!-- paired: current-page CTA -->
+        <div id="cta-card" class="card cta-card" hidden>
+          <div class="cta-source" id="cta-source">当前页面</div>
+          <div class="cta-title" id="cta-title">读取当前页面…</div>
+          <div class="capture-area" id="capture-area">
+            <button id="capture-target-row" class="target-row" type="button" aria-haspopup="menu">
+              <span>导入到</span>
+              <span class="target-value" id="capture-target-name">个人文库</span>
+              <svg class="target-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <button id="capture" class="primary" type="button">导入此页</button>
+            <span id="target-menu" class="target-menu" hidden></span>
+          </div>
+        </div>
+
+        <!-- unpaired: connect prompt -->
+        <div id="connect-card" class="card connect-card" hidden>
+          <div class="connect-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6"/><path d="M12 9v6"/><path d="M7 21H4a1 1 0 0 1-1-1v-3"/><path d="M17 3h3a1 1 0 0 1 1 1v3"/><path d="M21 17v3a1 1 0 0 1-1 1h-3"/><path d="M3 7V4a1 1 0 0 1 1-1h3"/></svg>
+          </div>
+          <div class="connect-title">尚未连接账号</div>
+          <div class="connect-desc">
+            打开 MangoWrite 网页端并登录，插件会自动连上。若之前手动断开过，
+            需要在网页端顶栏点一次「连接浏览器插件」。
+          </div>
+        </div>
+
+        <!-- queue -->
+        <div id="queue-section" hidden>
+          <div class="queue-head">
+            <span class="label">导入队列</span>
+            <span class="summary" id="queue-summary"></span>
+            <button id="queue-clear" class="queue-clear" type="button" hidden>清空记录</button>
+          </div>
+          <div id="task-list" class="task-list"></div>
+        </div>
+
+        <div id="empty-hint" class="empty-hint" hidden>
+          还没有导入任务。在文献详情页点「导入此页」，或点页面右侧的浮动按钮打开导入面板。
+        </div>
+
+        <!-- compact account chip -->
+        <div id="account-chip" class="account-chip" hidden>
+          <span class="avatar" id="account-avatar"></span>
+          <span class="email" id="account-email"></span>
+          <span class="manage">设置 →</span>
+        </div>
+      </section>
+
+      <!-- ================= SETTINGS VIEW ================= -->
+      <section id="settings-view" hidden>
+        <div class="topbar">
+          <button id="back-settings" class="icon-btn" type="button" title="返回" aria-label="返回">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="brand-text">
+            <h1>设置</h1>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <div class="settings-account">
+            <span class="avatar" id="settings-avatar"></span>
+            <div class="info">
+              <div class="name" id="settings-name"></div>
+              <div class="sub">已连接此设备</div>
+            </div>
+          </div>
+          <button id="logout" class="secondary" type="button">退出登录</button>
+        </div>
+
+        <div class="card settings-card">
+          <label class="toggle-row" for="fab-toggle">
+            <span class="t-label">显示页面浮动按钮</span>
+            <span class="switch">
+              <input type="checkbox" id="fab-toggle" />
+              <span class="track"></span>
+            </span>
+          </label>
+          <p class="setting-desc">在网页右侧显示可拖拽的悬浮导入按钮；识别到文献时自动点亮。</p>
+        </div>
+
+        <div id="build-info"></div>
+      </section>
+    </main>
+
+    <script type="module" src="./dist/popup.js"></script>
+  </body>
+</html>
